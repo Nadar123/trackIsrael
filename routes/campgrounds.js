@@ -2,23 +2,18 @@ var express = require("express");
 var router  = express.Router();
 var Campground = require("../models/campground");
 var middleware = require("../middleware");
+var geocoder = require('geocoder');
 var request = require("request");
 
 //INDEX - show all campgrounds
 router.get("/", function(req, res){
     // Get all campgrounds from DB
     Campground.find({}, function(err, allCampgrounds){
-       if(err){
-           console.log(err);
-       } else {
-           request('https://maps.googleapis.com/maps/api/geocode/json?address=sardine%20lake%20ca&key=AIzaSyBtHyZ049G_pjzIXDKsJJB5zMohfN67llM', function (error, response, body) {
-            if (!error && response.statusCode == 200) {
-                console.log(body); // Show the HTML for the Modulus homepage.
-                res.render("campgrounds/index",{campgrounds:allCampgrounds});
-
-            }
-});
-       }
+        if(err){
+            console.log(err);
+        } else {
+            res.render("campgrounds/index",{campgrounds:allCampgrounds});
+        }
     });
 });
 
@@ -32,18 +27,33 @@ router.post("/", middleware.isLoggedIn, function(req, res){
         id: req.user._id,
         username: req.user.username
     }
-    var newCampground = {name: name, image: image, description: desc, author:author}
-    // Create a new campground and save to DB
-    Campground.create(newCampground, function(err, newlyCreated){
-        if(err){
+    var cost = req.body.cost;
+    
+    geocoder.geocode(req.body.location, function (err, data) {
+        if (err){
             console.log(err);
-        } else {
-            //redirect back to campgrounds page
-            console.log(newlyCreated);
-            res.redirect("/campgrounds");
         }
+        var lat = 0;
+        var lng = 0;
+        var location = req.body.location;
+        if(data.results != undefined){
+            lat = data.results[0].geometry.location.lat;
+            lng = data.results[0].geometry.location.lng;
+            location = data.results[0].formatted_address;
+        }
+      var newCampground = {name: name, image: image, description: desc, cost: cost, author:author, location: location, lat: lat, lng: lng};
+      // Create a new campground and save to DB
+      Campground.create(newCampground, function(err, newlyCreated){
+          if(err){
+              console.log(err);
+          } else {
+              //redirect back to campgrounds page
+              console.log(newlyCreated);
+              res.redirect("/campgrounds");
+          }
+      });
     });
-});
+  });
 
 //NEW - show form to create new campground
 router.get("/new", middleware.isLoggedIn, function(req, res){
@@ -59,6 +69,7 @@ router.get("/:id", function(req, res){
         } else {
             console.log(foundCampground)
             //render show template with that campground
+            
             res.render("campgrounds/show", {campground: foundCampground});
         }
     });
@@ -78,17 +89,28 @@ router.get("/:id/edit", middleware.checkUserCampground, function(req, res){
 });
 
 router.put("/:id", function(req, res){
-    var newData = {name: req.body.name, image: req.body.image, description: req.body.desc};
-    Campground.findByIdAndUpdate(req.params.id, {$set: newData}, function(err, campground){
+    console.log('********* ' + req.body.location);
+    geocoder.geocode(req.body.location, function (err, data) {
         if(err){
-            req.flash("error", err.message);
-            res.redirect("back");
-        } else {
-            req.flash("success","Successfully Updated!");
-            res.redirect("/campgrounds/" + campground._id);
+            res.redirect("/");
+            return; 
         }
+        console.log(JSON.stringify(data));
+      var lat = data.results[0].geometry.location.lat;
+      var lng = data.results[0].geometry.location.lng;
+      var location = data.results[0].formatted_address;
+      var newData = {name: req.body.name, image: req.body.image, description: req.body.description, cost: req.body.cost, location: location, lat: lat, lng: lng};
+      Campground.findByIdAndUpdate(req.params.id, {$set: newData}, function(err, campground){
+          if(err){
+              req.flash("error", err.message);
+              res.redirect("back");
+          } else {
+              req.flash("success","Successfully Updated!");
+              res.redirect("/campgrounds/" + campground._id);
+          }
+      });
     });
-});
+  });
 
 
 //middleware

@@ -1,5 +1,10 @@
-var Comment = require("../models/comment");
+var express = require("express");
+var router  = express.Router();
 var Campground = require("../models/campground");
+var Comment = require("../models/comment");
+var middleware = require("../middleware");
+var geocoder = require('geocoder');
+
 module.exports = {
     isLoggedIn: function(req, res, next){
         if(req.isAuthenticated()){
